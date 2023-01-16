@@ -1,7 +1,7 @@
 /**
  * Script to periodically check new GMail messages for alerts from Craigslist. 
- * If mail has at least one link to a previously unknown CL listing, it is left as-is, otherwise it is 
- * tagged "cl_old" and deleted.
+ * If mail has at least one link to a previously unknown CL listing, it is starred, otherwise it is 
+ * moved to trash. 
  */
 
 // Maximum number of messages to process
@@ -10,8 +10,6 @@ var PAGE_SIZE = 150
 // Pattern for Craigslist links
 var CL_PATTERN = 'https://sfbay.craigslist.org/' 
 
-// Search pattern for GMail inbox
-var GMAIL_SEARCH = 'in:inbox from:"CL Search Alerts" is:unread -label:cl_processed -in:starred '
 
 /** 
  * Set the trigger to filter mail in inbox every 10 minutes
@@ -25,19 +23,18 @@ function setFilterTrigger() {
 }
 
 /**
- * Filters all unread mail from sender "CL Search Alerts" that does not have label "cl_processed".
- * If mail has at least one link to a previously unknown CL listing, it is left as-is, otherwise it is 
- * tagged "cl_old" and deleted. 
+ * Filters all unread mail from sender "CL Search Alerts" that is not starred.
+ * If mail has at least one link to a previously unknown CL listing, it is starred, otherwise it is 
+ * moved to trash. 
  * Listing IDs that have been seen are kept in a Google Sheets named "Craigslist Alert Exclusions".
  * Example link:
  * https://sfbay.craigslist.org/pen/grd/d/burlingame-plant-pedestal/7571365801.html
  */
 
 function filterMail() {
-  var labelProcd = GmailApp.createLabel("cl_processed"); // Always create labels, no-op if already exists
-  var labelOld= GmailApp.createLabel("cl_old");
+  var search = 'in:inbox -in:starred from:"CL Search Alerts" is:unread'
 
-  var threads = GmailApp.search(GMAIL_SEARCH, 0, PAGE_SIZE)
+  var threads = GmailApp.search(search, 0, PAGE_SIZE)
 
   for (var t = 0; t < threads.length; t++) {
     var thread = threads[t];
@@ -50,9 +47,11 @@ function filterMail() {
       Logger.log("T:"+t+" M:"+m+" Subject: "+subject);
       var resultMap = findCLLinks(body);
       var hasNewListings = checkListings(resultMap);
-      thread.addLabel(labelProcd);
-      if (! hasNewListings)
-         thread.addLabel(labelOld);
+      if (hasNewListings) {
+        message.star();
+      } else {
+        message.moveToTrash();
+      }
     }
   }
 }
